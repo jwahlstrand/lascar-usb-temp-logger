@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <glib.h>
 #include <libsoup/soup.h>
 
@@ -29,13 +30,16 @@
 #include "lascar.h"
 
 #define MAX_ERRORS 10
-#define SLEEP_TIME 1.0
+#define SLEEP_TIME 1.0 /* time between readings, in seconds */
+#define UPLOAD_TIME 60.0 /* time between uploadings, in seconds */
 
-static int n = 0;
+static gboolean log_local = FALSE;
+static gboolean testing = FALSE;
 static gboolean debug = FALSE;
 
 static GOptionEntry entries[] = {
-  {"num", 'n', 0, G_OPTION_ARG_INT, &n, "Number of readings to take (default: go on forever)", NULL },
+  {"log", 'l', 0, G_OPTION_ARG_NONE &log_local, "Log data locally as well", NULL},
+  {"test", 't', 0, G_OPTION_ARG_NONE, &testing, "Testing mode (i.e. don't actually upload data)", NULL},
   {"debug", 'd', 0, G_OPTION_ARG_NONE, &debug, "Enable debugging", NULL },
   { NULL }
 };
@@ -51,7 +55,7 @@ int main(int argc, char *argv[])
     int status = 0;
     int error_count = 0;
 
-    int count = 0;
+    int count = 1;
 
     GError *error = NULL;
     GOptionContext *context;
@@ -78,14 +82,18 @@ int main(int argc, char *argv[])
     /* parse config file */
     GKeyFile *gkf = g_key_file_new();
     g_key_file_load_from_file(gkf,"templogger.conf",G_KEY_FILE_NONE,&error);
-    gchar *url = g_key_file_get_string(gkf,"influx","url",&error);
-    int channel = 1;
-    const gchar *channel_name = "Thor";
-    const gchar *room = "Small\\ Lab";
-    int port = g_key_file_get_integer(gkf,"influx","port",&error);
-    gchar *db = g_key_file_get_string(gkf,"influx","database",&error);
-    gchar *username = g_key_file_get_string(gkf,"influx","username",&error);
-    gchar *password = g_key_file_get_string(gkf,"influx","password",&error);
+    if(error!=NULL) {
+        g_printerr("Can't load configuration file.\n");
+        exit(-1);
+    }
+    gchar *url = g_key_file_get_string(gkf,"influx","url",NULL);
+    int channel = g_key_file_get_integer(gkf,"channel","channel_num",NULL);
+    const gchar *channel_name = g_key_file_get_string(gkf,"channel","channel_name",NULL);
+    const gchar *room = g_key_file_get_string(gkf,"channel","room",NULL);
+    int port = g_key_file_get_integer(gkf,"influx","port",NULL);
+    gchar *db = g_key_file_get_string(gkf,"influx","database",NULL);
+    gchar *username = g_key_file_get_string(gkf,"influx","username",NULL);
+    gchar *password = g_key_file_get_string(gkf,"influx","password",NULL);
     g_key_file_free(gkf);
     
     /* open session */
@@ -96,8 +104,13 @@ int main(int argc, char *argv[])
 
     g_message(uri->str);
 
-    FILE *logfile = fopen("test.txt","w");
+    FILE *logfile = NULL;
+    if(log_local) {
+        logfile = fopen("log.txt","a");
+    }
     GString *body = g_string_sized_new(1024);
+    
+    int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
 
     while(1) {
         status = 0;
@@ -112,11 +125,13 @@ int main(int argc, char *argv[])
             
             gint64 t = 1000*g_get_real_time();
             
-            fprintf(logfile,"%" G_GINT64_FORMAT "\t%.1f\t%.1f\n",t, temp, hum);
-            fflush(logfile);
+            if(log_local) {
+              fprintf(logfile,"%" G_GINT64_FORMAT "\t%.1f\t%.1f\n",t, temp, hum);
+              fflush(logfile);
+            }
             
-            if(count % 60 == 0) {
-            SoupRequestHTTP *request = soup_session_request_http(session,"POST",uri->str,&error);
+            if(count % upload_freq == 0) {
+            SoupRequestHTTP *request = soup_session_request_http(session,"POST",uri->str,NULL);
             SoupMessage *message = soup_request_http_get_message(request);
             g_string_printf(body,"temp,channel=%d,channel_name=%s,room=%s",channel,channel_name,room);
             g_string_append_printf(body," value=%.1f %" G_GINT64_FORMAT,temp,t);
@@ -126,11 +141,13 @@ int main(int argc, char *argv[])
             
             g_print(body->str);
             
-            soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
+            if(!testing) {
+                soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
 	        session_status = soup_session_send_message(session,message);
-            g_message("HTTP response: %u",session_status);
+                g_message("HTTP response: %u",session_status);
 
-            g_object_unref(message);
+                g_object_unref(message);
+            }
             }
             count ++;
 
