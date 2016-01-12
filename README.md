@@ -1,0 +1,1 @@
+# lascar-usb-temp-logger
