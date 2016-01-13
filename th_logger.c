@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
     
     /* parse config file */
     GKeyFile *gkf = g_key_file_new();
-    g_key_file_load_from_file(gkf,"templogger.conf",G_KEY_FILE_NONE,&error);
+    g_key_file_load_from_data_dirs(gkf,"templogger.conf",NULL,G_KEY_FILE_NONE,&error);
     if(error!=NULL) {
         g_printerr("Can't load configuration file, aborting.\n");
         exit(-1);
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
         }
 
         if(status == 0) {
-            g_print("temp: %.1f, hum: %.1f\n", temp, hum);
+            //g_print("temp: %.1f, hum: %.1f\n", temp, hum);
             
             gint64 t = 1000*g_get_real_time();
             
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
             if(!testing) {
                 soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
 	        session_status = soup_session_send_message(session,message);
-                g_message("HTTP response: %u",session_status);
+                //g_message("HTTP response: %u",session_status);
             }
             g_object_unref(message);
             }
