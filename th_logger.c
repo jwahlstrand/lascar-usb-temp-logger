@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
         }
         if(testing && count>60)
           break;
-        sleep(SLEEP_TIME);
+        g_usleep(SLEEP_TIME*1000000);
     }
     g_string_free(uri,TRUE);
     g_string_free(body,TRUE);
