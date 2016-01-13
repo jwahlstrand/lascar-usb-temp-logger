@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "lascar.h"
 
 float get_temp(unsigned int t, int get_f) {
@@ -24,16 +25,16 @@ float get_hum(unsigned char h) {
     return rh;
 }
 
-hid_return
-get_reading(HIDInterface* hid, char* packet,
+int
+get_reading(hid_device* hid, char* packet,
               float* temp, float* hum, int get_f) {
     return get_reading_r(hid, packet, temp, hum, get_f, 1);
 }
 
-hid_return
-get_reading_r(HIDInterface* hid, char* packet,
+int
+get_reading_r(hid_device* hid, char* packet,
               float* temp, float* hum, int get_f, int retries) {
-    hid_return ret;
+    int ret;
 
     /*
      * The temperature and humidity values are always sent one after the other,
@@ -47,7 +48,7 @@ get_reading_r(HIDInterface* hid, char* packet,
      * reason the subsequent request fails, then there is a problem and return
      * an error.
      */
-    if((ret=read_device(hid, packet, TEMPERATURE)) != HID_RET_SUCCESS) {
+    if((ret=read_device(hid, packet, TEMPERATURE)) < 0) {
         if(ret == 21 && retries) {
             /*fprintf(stderr, "Retrying on error 21\n");*/
             return get_reading_r(hid, packet, temp, hum, get_f, --retries);
@@ -59,7 +60,7 @@ get_reading_r(HIDInterface* hid, char* packet,
 
     *temp = get_temp(pack((unsigned)packet[2], (unsigned)packet[1]), get_f);
 
-    if((ret=read_device(hid, packet, HUMIDITY)) != HID_RET_SUCCESS) {
+    if((ret=read_device(hid, packet, HUMIDITY)) < 0) {
         fprintf(stderr, "Unable to read humidity (%d)\n", HUMIDITY);
         return ret;
     }
@@ -75,55 +76,16 @@ get_reading_r(HIDInterface* hid, char* packet,
                   "Bad values for temp (%.1f) and hum (%.1f)\n", temp, hum);*/
         return get_reading_r(hid, packet, temp, hum, get_f, 2);
     } else {
-        return HID_RET_NOT_FOUND;
+        return -2;
     }
 }
 
-HIDInterface* init_termo(HIDInterface* hid) {
-    HIDInterfaceMatcher matcher = dev_id;
-    hid_return i;
+int read_device(hid_device* hid, char* buf, int size) {
+    int i;
 
-    i = hid_init();
-    if(i != HID_RET_SUCCESS) {
-        fprintf(stderr, "Could not init HID\n");
-        hid = NULL;
-    }
+    i = hid_read_timeout(hid, buf, size, 520);
 
-    hid = hid_new_HIDInterface();
-
-    i = hid_force_open(hid, 0, &matcher, 3);
-    if(i != HID_RET_SUCCESS) {
-        fprintf(stderr, "Unable to open device\n");
-        hid = NULL;
-    }
-
-    return hid;
-}
-
-hid_return restore_termo(HIDInterface* hid) {
-    hid_return i;
-
-    i = hid_close(hid);
-    if(i != HID_RET_SUCCESS) {
-        fprintf(stderr, "hid_close failed with return code %d\n", i);
-    }
-
-    hid_delete_HIDInterface(&hid);
-
-    i = hid_cleanup();
-    if(i != HID_RET_SUCCESS) {
-        fprintf(stderr, "hid_cleanup failed with return code %d\n", i);
-    }
-
-    return i;
-}
-
-hid_return read_device(HIDInterface* hid, char* buf, int size) {
-    hid_return i;
-
-    i = hid_interrupt_read(hid, EP_HID_IN, buf, size, espera);
-
-    if(i != HID_RET_SUCCESS) {
+    if(i < 0) {
         fprintf(stderr, "hid_get_input_report failed with return code %d\n", i);
     }
 

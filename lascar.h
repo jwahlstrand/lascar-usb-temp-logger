@@ -1,7 +1,7 @@
 #ifndef __LASCAR_H__
 #define __LASCAR_H__ 1
 
-#include <hid.h>
+#include <hidapi.h>
 
 #define EP_HID_IN 0x81
 #define espera 520 /* wait timeout */
@@ -17,18 +17,18 @@
 /**
  * Open the HID interface
  */
-HIDInterface* init_termo(HIDInterface*);
+hid_device* init_termo(hid_device*);
 
 /**
  * Close the HID interface
  */
-hid_return restore_termo(HIDInterface*);
+int restore_termo(hid_device*);
 
 /*
  * Retrieve temperature and humidity readings from the device
  */
-hid_return
-get_reading(HIDInterface* hid,
+int
+get_reading(hid_device* hid,
             char* packet, float* temp, float* hum, int get_f);
 
 /* the following functions are useful if only temp or humidity is desired */
@@ -51,14 +51,14 @@ float get_hum(unsigned char);
  * The retry parameter can be used to tell get_reading() to
  * automatically retry on error.
  */
-hid_return
-get_reading_r(HIDInterface* hid,
+int
+get_reading_r(hid_device* hid,
               char* packet, float* temp, float* hum, int get_f, int retries);
 
 /**
  * Read the specified number of bytes from the device
  */
-hid_return read_device(HIDInterface*, char*, int);
+int read_device(hid_device*, char*, int);
 
 /**
  * Pack two chars into an int

@@ -1,11 +1,11 @@
-PROGRAM = temp_logger
-PROGRAM_FILES = temp_logger.c
+PROGRAM = th_logger
+PROGRAM_FILES = th_logger.c
 
 CC = gcc
 
-CFLAGS	+= -g $(shell pkg-config --cflags libhid libsoup-2.4)
+CFLAGS	+= -g $(shell pkg-config --cflags hidapi-hidraw libsoup-2.4)
 LDFLAGS	+= -g
-LIBS 	+= $(shell pkg-config --libs libhid libsoup-2.4)
+LIBS 	+= $(shell pkg-config --libs hidapi-hidraw libsoup-2.4)
 
 SOURCES = $(wildcard *.c)
 

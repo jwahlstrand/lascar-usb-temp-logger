@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -24,7 +25,7 @@
 #include <libsoup/soup.h>
 
 /* human interface device API */
-#include <hid.h>
+#include <hidapi.h>
 
 /* lascar API */
 #include "lascar.h"
@@ -47,8 +48,7 @@ static GOptionEntry entries[] = {
 int main(int argc, char *argv[])
 {
     char packet[] = {0x00, 0x00, 0x00};
-    HIDInterface* hid = NULL;
-    hid_return ret;
+    int ret;
 
     float temp, hum;
 
@@ -67,23 +67,43 @@ int main(int argc, char *argv[])
       g_print ("option parsing failed: %s\n", error->message);
       exit (1);
     }
+    g_option_context_free(context);
 
     /* setup debugging to stderr if requested */
     if(debug) {
-        hid_set_debug(HID_DEBUG_ALL);
-        hid_set_debug_stream(stderr);
+        //hid_set_debug(HID_DEBUG_ALL);
+        //hid_set_debug_stream(stderr);
     }
-
-    if((hid=init_termo(hid)) == NULL) {
-        g_printerr("Device NOT present.\n");
+    
+    hid_device *handle;
+    // Enumerate and print the HID devices on the system
+    struct hid_device_info *devs, *cur_dev;
+	
+    devs = hid_enumerate(0x0, 0x0);
+    gboolean found = FALSE;
+    cur_dev = devs;
+    while (cur_dev) {
+        if(cur_dev->vendor_id == 0x1781 && cur_dev->product_id == 0x0ec4) {
+          found = TRUE;
+          printf("Found an EL-USB-TR based temperature and humidity sensor\n");
+          break;
+        }
+	cur_dev = cur_dev->next;
+    }
+    hid_free_enumeration(devs);
+    if(!found) {
+        g_printerr("Sensor not found, aborting.\n");
         exit(-1);
     }
+    
+    // Open the device using the VID and PID
+    handle = hid_open(0x1781, 0x0ec4, NULL);
     
     /* parse config file */
     GKeyFile *gkf = g_key_file_new();
     g_key_file_load_from_file(gkf,"templogger.conf",G_KEY_FILE_NONE,&error);
     if(error!=NULL) {
-        g_printerr("Can't load configuration file.\n");
+        g_printerr("Can't load configuration file, aborting.\n");
         exit(-1);
     }
     gchar *url = g_key_file_get_string(gkf,"influx","url",NULL);
@@ -111,12 +131,12 @@ int main(int argc, char *argv[])
     GString *body = g_string_sized_new(1024);
     
     int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
-
+    
     while(1) {
         status = 0;
 
-        ret = get_reading(hid, packet, &temp, &hum, TRUE);
-        if(ret != HID_RET_SUCCESS) {
+        ret = get_reading(handle, packet, &temp, &hum, TRUE);
+        if(ret < 0) {
             status = -1;
         }
 
@@ -145,9 +165,8 @@ int main(int argc, char *argv[])
                 soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
 	        session_status = soup_session_send_message(session,message);
                 g_message("HTTP response: %u",session_status);
-
-                g_object_unref(message);
             }
+            g_object_unref(message);
             }
             count ++;
 
@@ -159,10 +178,16 @@ int main(int argc, char *argv[])
         } else {
             error_count++;
         }
+        if(testing && count>60)
+          break;
         sleep(SLEEP_TIME);
     }
+    g_string_free(uri,TRUE);
+    g_string_free(body,TRUE);
+    g_object_unref(session);
 
-    restore_termo(hid);
-
+    hid_close(handle);
+    hid_exit();
+    
     return 0;
 }
