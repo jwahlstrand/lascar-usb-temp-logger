@@ -48,9 +48,9 @@ get_reading_r(hid_device* hid, char* packet,
      * reason the subsequent request fails, then there is a problem and return
      * an error.
      */
-    if((ret=read_device(hid, packet, TEMPERATURE)) < 0) {
-        if(ret == 21 && retries) {
-            /*fprintf(stderr, "Retrying on error 21\n");*/
+    if((ret=read_device(hid, packet, TEMPERATURE)) != 3) {
+        if(ret == 2 && retries) { /* we got a humidity reading */
+            fprintf(stderr, "Got %d bytes, retrying\n",ret);
             return get_reading_r(hid, packet, temp, hum, get_f, --retries);
         } else {
             fprintf(stderr, "Unable to read temperature (%d)\n", TEMPERATURE);
@@ -60,7 +60,7 @@ get_reading_r(hid_device* hid, char* packet,
 
     *temp = get_temp(pack((unsigned)packet[2], (unsigned)packet[1]), get_f);
 
-    if((ret=read_device(hid, packet, HUMIDITY)) < 0) {
+    if((ret=read_device(hid, packet, HUMIDITY)) != 2) {
         fprintf(stderr, "Unable to read humidity (%d)\n", HUMIDITY);
         return ret;
     }
