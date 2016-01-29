@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
     if(log_local) {
         logfile = fopen("log.txt","a");
     }
-    GString *body = g_string_sized_new(1024);
+    GString *body = g_string_new_len("",1024);
     
     int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
     
@@ -153,18 +153,22 @@ int main(int argc, char *argv[])
             if(count % upload_freq == 0) {
             SoupRequestHTTP *request = soup_session_request_http(session,"POST",uri->str,NULL);
             SoupMessage *message = soup_request_http_get_message(request);
-            g_string_printf(body,"temp,channel=%d,channel_name=%s,room=%s",channel,channel_name,room);
+            g_string_append_printf(body,"temp,channel=%d,channel_name=%s,room=%s",channel,channel_name,room);
             g_string_append_printf(body," value=%.1f %" G_GINT64_FORMAT,temp,t);
             g_string_append_printf(body,"\n");
             g_string_append_printf(body,"hum,channel=%d,channel_name=%s,room=%s",channel,channel_name,room);
             g_string_append_printf(body," value=%.1f %" G_GINT64_FORMAT,hum,t);
+            g_string_append_printf(body,"\n");
             
             g_print(body->str);
             
             if(!testing) {
                 soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
 	        session_status = soup_session_send_message(session,message);
-                //g_message("HTTP response: %u",session_status);
+                if(session_status == 204) { /* message was received */
+                    g_string_erase(body,0,-1); /* clear the string */
+                }
+                /* otherwise, keep it and attempt to resend next time */
             }
             g_object_unref(message);
             }
