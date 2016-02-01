@@ -98,6 +98,10 @@ int main(int argc, char *argv[])
     
     // Open the device using the VID and PID
     handle = hid_open(0x1781, 0x0ec4, NULL);
+    if(handle == NULL) {
+      g_printerr("Error opening sensor.\n");
+      exit(-1);
+    }
     
     /* parse config file */
     GKeyFile *gkf = g_key_file_new();
@@ -128,7 +132,7 @@ int main(int argc, char *argv[])
     if(log_local) {
         logfile = fopen("log.txt","a");
     }
-    GString *body = g_string_new_len("",1024);
+    GString *body = g_string_new("");
     
     int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
     
@@ -141,14 +145,15 @@ int main(int argc, char *argv[])
         }
 
         if(status == 0) {
-            //g_print("temp: %.1f, hum: %.1f\n", temp, hum);
-            
             gint64 t = 1000*g_get_real_time();
             
             if(log_local) {
               fprintf(logfile,"%" G_GINT64_FORMAT "\t%.1f\t%.1f\n",t, temp, hum);
               fflush(logfile);
             }
+            
+            if(debug)
+              g_print("%" G_GINT64_FORMAT "\t%.1f\t%.1f\n",t, temp, hum);
             
             if(count % upload_freq == 0) {
             SoupRequestHTTP *request = soup_session_request_http(session,"POST",uri->str,NULL);
@@ -160,13 +165,18 @@ int main(int argc, char *argv[])
             g_string_append_printf(body," value=%.1f %" G_GINT64_FORMAT,hum,t);
             g_string_append_printf(body,"\n");
             
-            g_print(body->str);
+            if(debug)
+              g_message(body->str);
             
             if(!testing) {
                 soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
 	        session_status = soup_session_send_message(session,message);
                 if(session_status == 204) { /* message was received */
+                    g_print("received status %d\n",session_status);
                     g_string_erase(body,0,-1); /* clear the string */
+                }
+                else {
+                  g_print("no connection to server");
                 }
                 /* otherwise, keep it and attempt to resend next time */
             }
