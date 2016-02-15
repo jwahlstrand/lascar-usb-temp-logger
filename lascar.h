@@ -3,26 +3,10 @@
 
 #include <hidapi.h>
 
-#define EP_HID_IN 0x81
-#define espera 520 /* wait timeout */
-#define STEPT 0.1
-#define STEPH 0.5
-#define dev_id { 0x1781, 0x0ec4, NULL, NULL, 0 }
-
 #define HUMIDITY 2
 #define TEMPERATURE 3
 
-/* it's likely the following three functions are the most useful */
-
-/**
- * Open the HID interface
- */
-hid_device* init_termo(hid_device*);
-
-/**
- * Close the HID interface
- */
-int restore_termo(hid_device*);
+void set_debug(int d);
 
 /*
  * Retrieve temperature and humidity readings from the device
@@ -53,7 +37,7 @@ float get_hum(unsigned char);
  */
 int
 get_reading_r(hid_device* hid,
-              char* packet, float* temp, float* hum, int get_f, int retries);
+              unsigned char* packet, float* temp, float* hum, int get_f, int retries);
 
 /**
  * Read the specified number of bytes from the device

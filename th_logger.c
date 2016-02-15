@@ -69,14 +69,7 @@ int main(int argc, char *argv[])
     }
     g_option_context_free(context);
 
-    /* setup debugging to stderr if requested */
-    if(debug) {
-        //hid_set_debug(HID_DEBUG_ALL);
-        //hid_set_debug_stream(stderr);
-    }
-    
     hid_device *handle;
-    // Enumerate and print the HID devices on the system
     struct hid_device_info *devs, *cur_dev;
 	
     devs = hid_enumerate(0x0, 0x0);
@@ -88,7 +81,7 @@ int main(int argc, char *argv[])
           printf("Found an EL-USB-TR based temperature and humidity sensor\n");
           break;
         }
-	cur_dev = cur_dev->next;
+        cur_dev = cur_dev->next;
     }
     hid_free_enumeration(devs);
     if(!found) {
@@ -103,36 +96,45 @@ int main(int argc, char *argv[])
       exit(-1);
     }
     
+    SoupSession *session = NULL;
+    guint session_status;
+    int channel;
+    gchar *channel_name;
+    gchar *room;
+    GString *uri, *body;
+    
     /* parse config file */
     GKeyFile *gkf = g_key_file_new();
     g_key_file_load_from_data_dirs(gkf,"templogger.conf",NULL,G_KEY_FILE_NONE,&error);
     if(error!=NULL) {
-        g_printerr("Can't load configuration file, aborting.\n");
-        exit(-1);
+        g_printerr("Can't load configuration file, not uploading to server.\n");
+        g_key_file_free(gkf);
     }
-    gchar *url = g_key_file_get_string(gkf,"influx","url",NULL);
-    int channel = g_key_file_get_integer(gkf,"channel","channel_num",NULL);
-    const gchar *channel_name = g_key_file_get_string(gkf,"channel","channel_name",NULL);
-    const gchar *room = g_key_file_get_string(gkf,"channel","room",NULL);
-    int port = g_key_file_get_integer(gkf,"influx","port",NULL);
-    gchar *db = g_key_file_get_string(gkf,"influx","database",NULL);
-    gchar *username = g_key_file_get_string(gkf,"influx","username",NULL);
-    gchar *password = g_key_file_get_string(gkf,"influx","password",NULL);
-    g_key_file_free(gkf);
+    else {
+      gchar *url = g_key_file_get_string(gkf,"influx","url",NULL);
+      channel = g_key_file_get_integer(gkf,"channel","channel_num",NULL);
+      channel_name = g_key_file_get_string(gkf,"channel","channel_name",NULL);
+      room = g_key_file_get_string(gkf,"channel","room",NULL);
+      int port = g_key_file_get_integer(gkf,"influx","port",NULL);
+      gchar *db = g_key_file_get_string(gkf,"influx","database",NULL);
+      gchar *username = g_key_file_get_string(gkf,"influx","username",NULL);
+      gchar *password = g_key_file_get_string(gkf,"influx","password",NULL);
+      g_key_file_free(gkf);
     
-    /* open session */
-    guint session_status;
-    SoupSession *session = soup_session_new();
-    GString *uri = g_string_new("http://");
-    g_string_append_printf(uri,"%s:%d/write?db=%s&u=%s&p=%s",url,port,db,username,password);
+      /* open session */
+    
+      session = soup_session_new();
+      uri = g_string_new("http://");
+      g_string_append_printf(uri,"%s:%d/write?db=%s&u=%s&p=%s",url,port,db,username,password);
 
-    g_message(uri->str);
-
+      g_message(uri->str);
+      body = g_string_new("");
+    }
+    
     FILE *logfile = NULL;
     if(log_local) {
         logfile = fopen("log.txt","a");
     }
-    GString *body = g_string_new("");
     
     int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
     
@@ -155,7 +157,7 @@ int main(int argc, char *argv[])
             if(debug)
               g_print("%" G_GINT64_FORMAT "\t%.1f\t%.1f\n",t, temp, hum);
             
-            if(count % upload_freq == 0) {
+            if(session && (count % upload_freq == 0)) {
             SoupRequestHTTP *request = soup_session_request_http(session,"POST",uri->str,NULL);
             SoupMessage *message = soup_request_http_get_message(request);
             g_string_append_printf(body,"temp,channel=%d,channel_name=%s,room=%s",channel,channel_name,room);
@@ -196,10 +198,11 @@ int main(int argc, char *argv[])
           break;
         g_usleep(SLEEP_TIME*1000000);
     }
-    g_string_free(uri,TRUE);
-    g_string_free(body,TRUE);
-    g_object_unref(session);
-
+    if(session) {
+      g_string_free(uri,TRUE);
+      g_string_free(body,TRUE);
+      g_object_unref(session);
+    }
     hid_close(handle);
     hid_exit();
     

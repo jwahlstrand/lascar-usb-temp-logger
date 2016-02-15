@@ -1,26 +1,24 @@
 #include <stdio.h>
 #include "lascar.h"
 
-float get_temp(unsigned int t, int get_f) {
-    float rt = -200.0;
+static int debug = 0;
 
-    for(; t>0; t--) {
-        rt += STEPT;
-    }
+void set_debug(int d) {
+  debug=d;
+}
+
+float get_temp(unsigned int t, int get_f) {
+    float rt = -200.0f+0.1f*t;
 
     if(get_f) {
-      rt = (rt * (9.0/5.0)) + 32;
+      rt = (rt * (9.0f/5.0f)) + 32.f;
     }
 
     return rt;
 }
 
 float get_hum(unsigned char h) {
-    float rh = 0;
-
-    for(; h>0x00; h--) {
-        rh+= STEPH;
-    }
+    float rh = ((float) h)/2.f;
 
     return rh;
 }
@@ -32,7 +30,7 @@ get_reading(hid_device* hid, char* packet,
 }
 
 int
-get_reading_r(hid_device* hid, char* packet,
+get_reading_r(hid_device* hid, unsigned char* packet,
               float* temp, float* hum, int get_f, int retries) {
     int ret;
 
@@ -57,6 +55,9 @@ get_reading_r(hid_device* hid, char* packet,
             return ret;
         }
     }
+    
+    if(debug)
+      printf("%u %u %u\n",(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
 
     *temp = get_temp(pack((unsigned)packet[2], (unsigned)packet[1]), get_f);
 
@@ -64,6 +65,9 @@ get_reading_r(hid_device* hid, char* packet,
         fprintf(stderr, "Unable to read humidity (%d)\n", HUMIDITY);
         return ret;
     }
+    
+    if(debug)
+      printf("%u %u %u\n",(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
 
     *hum = get_hum((unsigned)packet[1]);
 
