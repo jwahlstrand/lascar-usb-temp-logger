@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 
       g_message(uri->str);
       body = g_string_new("");
+	  g_print("Uploading as channel %d, name %s, room %s",channel, channel_name, room);
     }
     
     FILE *logfile = NULL;
