@@ -8,6 +8,10 @@
 
 void set_debug(int d);
 
+
+int search_for_device();
+hid_device *open_lascar();
+
 /*
  * Retrieve temperature and humidity readings from the device
  */

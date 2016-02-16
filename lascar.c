@@ -7,6 +7,29 @@ void set_debug(int d) {
   debug=d;
 }
 
+int search_for_device()
+{
+    struct hid_device_info *devs, *cur_dev;
+	
+    devs = hid_enumerate(0x0, 0x0);
+    int found = 0;
+    cur_dev = devs;
+    while (cur_dev) {
+        if(cur_dev->vendor_id == 0x1781 && cur_dev->product_id == 0x0ec4) {
+          found = 1;
+          printf("Found an EL-USB-TR based temperature and humidity sensor\n");
+          break;
+        }
+        cur_dev = cur_dev->next;
+    }
+    hid_free_enumeration(devs);
+    return found;
+}
+
+hid_device *open_lascar() {
+  return hid_open(0x1781, 0x0ec4, NULL);
+}
+
 float get_temp(unsigned int t, int get_f) {
     float rt = -200.0f+0.1f*t;
 

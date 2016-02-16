@@ -24,9 +24,6 @@
 #include <glib.h>
 #include <libsoup/soup.h>
 
-/* human interface device API */
-#include <hidapi.h>
-
 /* lascar API */
 #include "lascar.h"
 
@@ -48,11 +45,9 @@ static GOptionEntry entries[] = {
 int main(int argc, char *argv[])
 {
     char packet[] = {0x00, 0x00, 0x00};
-    int ret;
 
     float temp, hum;
 
-    int status = 0;
     int error_count = 0;
 
     int count = 1;
@@ -70,34 +65,21 @@ int main(int argc, char *argv[])
     g_option_context_free(context);
 
     hid_device *handle;
-    struct hid_device_info *devs, *cur_dev;
-	
-    devs = hid_enumerate(0x0, 0x0);
-    gboolean found = FALSE;
-    cur_dev = devs;
-    while (cur_dev) {
-        if(cur_dev->vendor_id == 0x1781 && cur_dev->product_id == 0x0ec4) {
-          found = TRUE;
-          printf("Found an EL-USB-TR based temperature and humidity sensor\n");
-          break;
-        }
-        cur_dev = cur_dev->next;
-    }
-    hid_free_enumeration(devs);
+    gboolean found = search_for_device();
+
     if(!found) {
         g_printerr("Sensor not found, aborting.\n");
         exit(-1);
     }
     
     // Open the device using the VID and PID
-    handle = hid_open(0x1781, 0x0ec4, NULL);
+    handle = open_lascar();
     if(handle == NULL) {
       g_printerr("Error opening sensor.\n");
       exit(-1);
     }
     
     SoupSession *session = NULL;
-    guint session_status;
     int channel;
     gchar *channel_name;
     gchar *room;
@@ -136,17 +118,11 @@ int main(int argc, char *argv[])
         logfile = fopen("log.txt","a");
     }
     
-    int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
+    const int upload_freq = floor(UPLOAD_TIME/SLEEP_TIME);
     
     while(1) {
-        status = 0;
-
-        ret = get_reading(handle, packet, &temp, &hum, TRUE);
-        if(ret < 0) {
-            status = -1;
-        }
-
-        if(status == 0) {
+        int ret = get_reading(handle, packet, &temp, &hum, TRUE);
+        if(ret >= 0) {
             gint64 t = 1000*g_get_real_time();
             
             if(log_local) {
@@ -172,9 +148,9 @@ int main(int argc, char *argv[])
             
             if(!testing) {
                 soup_message_set_request(message,"application/binary",SOUP_MEMORY_COPY,body->str,body->len);
-	        session_status = soup_session_send_message(session,message);
+                guint session_status = soup_session_send_message(session,message);
                 if(session_status == 204) { /* message was received */
-                    g_print("received status %d\n",session_status);
+                    //g_print("received status %d\n",session_status);
                     g_string_erase(body,0,-1); /* clear the string */
                 }
                 else {
