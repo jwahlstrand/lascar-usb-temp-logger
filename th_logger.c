@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
       exit (1);
     }
     g_option_context_free(context);
-
+    set_debug(debug);
     hid_device *handle;
     gboolean found = search_for_device();
 

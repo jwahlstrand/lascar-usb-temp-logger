@@ -69,34 +69,38 @@ get_reading_r(hid_device* hid, unsigned char* packet,
      * reason the subsequent request fails, then there is a problem and return
      * an error.
      */
-    if((ret=read_device(hid, packet, TEMPERATURE)) != 3) {
-        if(ret == 2 && retries) { /* we got a humidity reading */
-            fprintf(stderr, "Got %d bytes, retrying\n",ret);
-            return get_reading_r(hid, packet, temp, hum, get_f, --retries);
-        } else {
-            fprintf(stderr, "Unable to read temperature (%d)\n", TEMPERATURE);
-            return ret;
-        }
+	if(debug)
+		printf("start reading\n");
+	ret=read_device(hid, packet, TEMPERATURE);
+	if(debug) {
+	  printf("Got %d bytes: %u %u %u\n",ret,(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
+	}
+	if(packet[0] == 2 && retries) { /* we got a humidity reading */
+        if(debug)
+		  printf("Got %d bytes, retrying\n",ret);
+        return get_reading_r(hid, packet, temp, hum, get_f, --retries);
+    } else if (packet[0]!=3) {
+        if(debug)
+	      printf("Unable to read temperature (%d)\n", TEMPERATURE);
+        return packet[0];
     }
     
-    if(debug)
-      printf("%u %u %u\n",(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
-
     *temp = get_temp(pack((unsigned)packet[2], (unsigned)packet[1]), get_f);
 
-    if((ret=read_device(hid, packet, HUMIDITY)) != 2) {
-        fprintf(stderr, "Unable to read humidity (%d)\n", HUMIDITY);
-        return ret;
+	ret=read_device(hid, packet, HUMIDITY);
+	if(debug)
+      printf("Got %d bytes, %u %u %u\n",ret,(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
+    if(packet[0] != 2) {
+        if(debug)
+		  printf("Unable to read humidity (%d)\n", HUMIDITY);
+        return packet[0];
     }
-    
-    if(debug)
-      printf("%u %u %u\n",(unsigned int) packet[2],(unsigned int) packet[1],(unsigned int) packet[0]);
 
     *hum = get_hum((unsigned)packet[1]);
 
     /* check to make sure the values found are within spec, otherwise retry */
     if(*temp >= -200.0 && *temp <= 200.0 && *hum >= 0.0 && *hum <= 100.0) {
-        return ret;
+        return packet[0];
     } else if(retries) {
         /* if the values were bad, try another two times before giving up */
         /*fprintf(stderr,
